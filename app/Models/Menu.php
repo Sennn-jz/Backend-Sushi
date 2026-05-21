@@ -2,16 +2,9 @@
 
 namespace App\Models;
 
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Model;
 
 class Menu extends Model
 {
-    protected $fillable = [
-        'name',
-        'description',
-        'price',
-        'stock',
-        'image_url',
-        'category',
-    ];
+    protected $fillable = ['name', 'description', 'price', 'image', 'is_available'];
 }

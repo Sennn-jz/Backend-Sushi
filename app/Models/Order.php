@@ -2,35 +2,22 @@
 
 namespace App\Models;
 
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
     protected $fillable = [
-        'user_id',
-        'items',
-        'total_price',
-        'order_token',
-        'payment_status',
-        'status',
+        'user_id', 'order_code', 'customer_name',
+        'address', 'total_price', 'status'
     ];
 
-    protected $casts = [
-        'items' => 'array',
-    ];
-
-    public function user()
+    public function items()
     {
-        return $this->belongsTo(User::class);
+        return $this->hasMany(OrderItem::class);
     }
 
     public function payment()
     {
         return $this->hasOne(Payment::class);
-    }
-
-    public function histories()
-    {
-        return $this->hasMany(OrderHistory::class);
     }
 }

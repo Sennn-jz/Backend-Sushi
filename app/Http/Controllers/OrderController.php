@@ -1,131 +1,190 @@
 <?php
-
 namespace App\Http\Controllers;
-
-use App\Models\Order;
-use App\Models\Cart;
-use App\Models\OrderHistory;
+use App\Models\{Cart, CartItem, Order, OrderItem, Payment};
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
+    // =====================================================
+    // PATH A: Bayar Langsung (tanpa cart)
+    // POST /api/orders
+    // =====================================================
     public function store(Request $request)
     {
-        $cart = Cart::where('user_id', Auth::id())->first();
-
         $request->validate([
-            'payment_method' => 'required|string'
+            'customer_name'  => 'required|string|max:255',
+            'address'        => 'required|string',
+            'payment_method' => 'required|in:cash,transfer,qris',
+            'items'          => 'required|array|min:1',
+            'items.*.menu_id'  => 'required|exists:menus,id',
+            'items.*.quantity' => 'required|integer|min:1',
         ]);
 
-        if (!$cart || empty($cart->items)) {
-            return response()->json(['status' => false, 'message' => 'Cart is empty'], 400);
-        }
+        DB::beginTransaction();
+        try {
+            // 1. Hitung total
+            $total = 0;
+            $itemsData = [];
 
-        $totalPrice = array_reduce($cart->items, function ($carry, $item) {
-            return $carry + ($item['price'] * $item['quantity']);
-        }, 0);
+            foreach ($request->items as $item) {
+                $menu = \App\Models\Menu::findOrFail($item['menu_id']);
+                $subtotal = $menu->price * $item['quantity'];
+                $total += $subtotal;
 
-        $orderToken = 'ORD-' . Str::random(10);
+                $itemsData[] = [
+                    'menu_id'  => $item['menu_id'],
+                    'quantity' => $item['quantity'],
+                    'price'    => $menu->price,  // snapshot harga
+                ];
+            }
 
-        $order = Order::create([
-            'user_id' => Auth::id(),
-            'items' => $cart->items,
-            'total_price' => $totalPrice,
-            'order_token' => $orderToken,
-            'payment_status' => 'unpaid',
-            'status' => 'pending',
-        ]);
-        
-        // Save payment method
-        \App\Models\Payment::create([
-            'order_id' => $order->id,
-            'payment_method' => $request->payment_method,
-            'payment_status' => 'unpaid',
-            'payment_time' => null,
-        ]);
+            // 2. Buat order + generate order_code unik
+            $order = Order::create([
+                'user_id'       => $request->user()->id,
+                'order_code'    => 'ORD-' . strtoupper(Str::random(8)),
+                'customer_name' => $request->customer_name,
+                'address'       => $request->address,
+                'total_price'   => $total,
+                'status'        => 'pending',
+            ]);
 
-        OrderHistory::create([
-            'order_id' => $order->id,
-            'old_status' => null,
-            'new_status' => 'pending',
-            'updated_by' => Auth::id(),
-        ]);
+            // 3. Simpan order items
+            foreach ($itemsData as $itemData) {
+                OrderItem::create(array_merge($itemData, ['order_id' => $order->id]));
+            }
 
-        $cart->delete();
+            // 4. Simpan payment
+            Payment::create([
+                'order_id'       => $order->id,
+                'payment_method' => $request->payment_method,
+                'status'         => 'pending',
+            ]);
 
-        return response()->json([
-            'status' => true,
-            'message' => 'Pesanan berhasil dibuat',
-            'data' => [
-                'order_id' => $order->id,
-                'order_token' => $orderToken,
-                'total_price' => $totalPrice,
-                'status' => 'pending'
-            ]
-        ], 201);
-    }
+            DB::commit();
 
-    public function myOrders()
-    {
-        $orders = Order::where('user_id', Auth::id())->orderBy('created_at', 'desc')->get();
-        
-        $data = $orders->map(function ($order) {
-            return [
-                'order_id' => $order->id,
-                'status' => $order->status,
+            return response()->json([
+                'status'      => true,
+                'message'     => 'Pesanan berhasil dibuat',
+                'order_code'  => $order->order_code,
                 'total_price' => $order->total_price,
-            ];
-        });
+                'data'        => $order->load('items.menu', 'payment'),
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status'  => false,
+                'message' => 'Gagal membuat pesanan: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    // =====================================================
+    // PATH B: Checkout dari Cart
+    // POST /api/cart/checkout
+    // =====================================================
+    public function checkoutFromCart(Request $request)
+    {
+        $request->validate([
+            'customer_name'  => 'required|string|max:255',
+            'address'        => 'required|string',
+            'payment_method' => 'required|in:cash,transfer,qris',
+        ]);
+
+        $cart = Cart::where('user_id', $request->user()->id)
+            ->with('items.menu')
+            ->firstOrFail();
+
+        if ($cart->items->isEmpty()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Cart kosong, tidak bisa checkout',
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            // 1. Hitung total dari cart
+            $total = $cart->items->sum(
+                fn($item) => $item->menu->price * $item->quantity
+            );
+
+            // 2. Buat order + generate order_code unik
+            $order = Order::create([
+                'user_id'       => $request->user()->id,
+                'order_code'    => 'ORD-' . strtoupper(Str::random(8)),
+                'customer_name' => $request->customer_name,
+                'address'       => $request->address,
+                'total_price'   => $total,
+                'status'        => 'pending',
+            ]);
+
+            // 3. Pindahkan cart items → order items (snapshot harga)
+            foreach ($cart->items as $cartItem) {
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'menu_id'  => $cartItem->menu_id,
+                    'quantity' => $cartItem->quantity,
+                    'price'    => $cartItem->menu->price,
+                ]);
+            }
+
+            // 4. Simpan payment
+            Payment::create([
+                'order_id'       => $order->id,
+                'payment_method' => $request->payment_method,
+                'status'         => 'pending',
+            ]);
+
+            // 5. Kosongkan cart setelah checkout
+            $cart->items()->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'status'      => true,
+                'message'     => 'Checkout berhasil',
+                'order_code'  => $order->order_code,
+                'total_price' => $order->total_price,
+                'data'        => $order->load('items.menu', 'payment'),
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status'  => false,
+                'message' => 'Gagal checkout: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    // Lihat detail pesanan milik user
+    public function show(Request $request, $orderId)
+    {
+        $order = Order::where('id', $orderId)
+            ->where('user_id', $request->user()->id)
+            ->with('items.menu', 'payment')
+            ->firstOrFail();
 
         return response()->json([
             'status' => true,
-            'data' => $data
+            'data'   => $order,
         ]);
     }
 
-    public function show($id)
+    // Lihat semua pesanan milik user
+    public function myOrders(Request $request)
     {
-        $order = Order::where('_id', $id)->where('user_id', Auth::id())->first();
-
-        if (!$order) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Order not found'
-            ], 404);
-        }
+        $orders = Order::where('user_id', $request->user()->id)
+            ->with('items.menu', 'payment')
+            ->latest()
+            ->get();
 
         return response()->json([
             'status' => true,
-            'data' => $order
-        ]);
-    }
-
-    public function updatePayment(Request $request, $id)
-    {
-        $order = Order::where('_id', $id)->where('user_id', Auth::id())->first();
-
-        if (!$order) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Order not found'
-            ], 404);
-        }
-
-        $order->payment_status = 'paid';
-        $order->save();
-        
-        $payment = \App\Models\Payment::where('order_id', $order->id)->first();
-        if ($payment) {
-            $payment->payment_status = 'paid';
-            $payment->payment_time = now();
-            $payment->save();
-        }
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Pembayaran berhasil'
+            'data'   => $orders,
         ]);
     }
 }

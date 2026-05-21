@@ -19,12 +19,17 @@ use App\Http\Controllers\MenuController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\Admin\AdminAuthController;
 
+// === PUBLIC ROUTES ===
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
-Route::get('/menus', [MenuController::class, 'index']);
-Route::get('/menus/{id}', [MenuController::class, 'show']);
+Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
+// Menu (semua user bisa lihat)
+Route::get('/menus', [MenuController::class, 'index']);
+
+// === PROTECTED ROUTES — USER ===
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/user', function (Request $request) {
@@ -32,24 +37,31 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // Cart
-    Route::get('/cart', [CartController::class, 'index']);
-    Route::post('/cart', [CartController::class, 'store']);
-    Route::delete('/cart/{id}', [CartController::class, 'destroy']);
+    Route::get('/cart',                      [CartController::class, 'index']);
+    Route::post('/cart/items',               [CartController::class, 'addItem']);
+    Route::put('/cart/items/{cartItemId}',   [CartController::class, 'updateItem']);
+    Route::delete('/cart/items/{cartItemId}',[CartController::class, 'removeItem']);
 
     // Orders
-    Route::post('/orders', [OrderController::class, 'store']);
-    Route::get('/my-orders', [OrderController::class, 'myOrders']);
-    Route::get('/orders/{id}', [OrderController::class, 'show']);
-    Route::put('/orders/{id}/payment', [OrderController::class, 'updatePayment']);
+    Route::post('/orders',              [OrderController::class, 'store']);        // Path A
+    Route::post('/cart/checkout',       [OrderController::class, 'checkoutFromCart']); // Path B
+    Route::get('/orders',               [OrderController::class, 'myOrders']);
+    Route::get('/orders/{orderId}',     [OrderController::class, 'show']);
+});
 
-    // Admin Routes
-    Route::prefix('admin')->middleware('role:admin')->group(function () {
-        Route::post('/menus', [AdminController::class, 'storeMenu']);
-        Route::put('/menus/{id}', [AdminController::class, 'updateMenu']);
-        Route::delete('/menus/{id}', [AdminController::class, 'destroyMenu']);
-        
-        Route::get('/orders', [AdminController::class, 'getOrders']);
-        Route::put('/orders/{id}/confirm', [AdminController::class, 'confirmOrder']);
-        Route::put('/orders/{id}/status', [AdminController::class, 'updateOrderStatus']);
-    });
+// === PROTECTED ROUTES — ADMIN ===
+// Middleware 'auth:sanctum' + cek ability 'admin'
+Route::middleware(['auth:sanctum', 'ability:admin'])->prefix('admin')->group(function () {
+    Route::post('/logout', [AdminAuthController::class, 'logout']);
+
+    // Nanti diisi:
+    // CRUD menu
+    // Manage orders
+    Route::post('/menus', [AdminController::class, 'storeMenu']);
+    Route::put('/menus/{id}', [AdminController::class, 'updateMenu']);
+    Route::delete('/menus/{id}', [AdminController::class, 'destroyMenu']);
+    
+    Route::get('/orders', [AdminController::class, 'getOrders']);
+    Route::put('/orders/{id}/confirm', [AdminController::class, 'confirmOrder']);
+    Route::put('/orders/{id}/status', [AdminController::class, 'updateOrderStatus']);
 });

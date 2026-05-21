@@ -1,108 +1,95 @@
 <?php
-
 namespace App\Http\Controllers;
-
-use App\Models\Cart;
+use App\Models\{Cart, CartItem, Menu};
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class CartController extends Controller
 {
-    public function index()
+    // GET /api/cart — lihat isi cart
+    public function index(Request $request)
     {
-        $cart = Cart::where('user_id', Auth::id())->first();
+        $cart = Cart::firstOrCreate(['user_id' => $request->user()->id]);
+        $items = $cart->items()->with('menu')->get();
 
-        if (!$cart) {
-            return response()->json([
-                'status' => true, 
-                'data' => [
-                    'items' => [], 
-                    'total_price' => 0
-                ]
-            ]);
-        }
-
-        $items = [];
-        $totalPrice = 0;
-        if ($cart->items) {
-            foreach ($cart->items as $item) {
-                $menu = \App\Models\Menu::find($item['menu_id']);
-                if ($menu) {
-                    $items[] = [
-                        'menu_id' => $menu->id,
-                        'menu_name' => $menu->name,
-                        'quantity' => $item['quantity'],
-                        'price' => $menu->price,
-                    ];
-                    $totalPrice += ($menu->price * $item['quantity']);
-                }
-            }
-        }
+        $total = $items->sum(fn($item) => $item->menu->price * $item->quantity);
 
         return response()->json([
             'status' => true,
-            'data' => [
-                'items' => $items,
-                'total_price' => $totalPrice,
-            ]
+            'data'   => [
+                'cart_id' => $cart->id,
+                'items'   => $items,
+                'total'   => $total,
+            ],
         ]);
     }
 
-    public function store(Request $request)
+    // POST /api/cart/items — tambah item ke cart
+    public function addItem(Request $request)
     {
         $request->validate([
-            'menu_id' => 'required',
+            'menu_id'  => 'required|exists:menus,id',
             'quantity' => 'required|integer|min:1',
         ]);
 
-        $menu = \App\Models\Menu::find($request->menu_id);
-        if (!$menu) {
-            return response()->json(['status' => false, 'message' => 'Menu not found'], 404);
-        }
+        $cart = Cart::firstOrCreate(['user_id' => $request->user()->id]);
 
-        $cart = Cart::firstOrCreate(['user_id' => Auth::id()]);
-        
-        $items = $cart->items ?? [];
-        $menuId = $request->menu_id;
-        
-        $found = false;
-        foreach ($items as &$item) {
-            if ($item['menu_id'] === $menuId) {
-                $item['quantity'] += $request->quantity;
-                $found = true;
-                break;
-            }
-        }
-        
-        if (!$found) {
-            $items[] = [
-                'menu_id' => $menuId,
+        // Kalau item sudah ada di cart, tambah qty-nya
+        $existingItem = CartItem::where('cart_id', $cart->id)
+            ->where('menu_id', $request->menu_id)
+            ->first();
+
+        if ($existingItem) {
+            $existingItem->increment('quantity', $request->quantity);
+            $item = $existingItem->fresh();
+        } else {
+            $item = CartItem::create([
+                'cart_id'  => $cart->id,
+                'menu_id'  => $request->menu_id,
                 'quantity' => $request->quantity,
-                'price' => $menu->price,
-            ];
+            ]);
         }
 
-        $cart->items = $items;
-        $cart->save();
-
-        return response()->json(['status' => true, 'message' => 'Menu berhasil ditambahkan ke cart']);
+        return response()->json([
+            'status'  => true,
+            'message' => 'Item ditambahkan ke cart',
+            'data'    => $item,
+        ], 201);
     }
 
-    public function destroy($menu_id)
+    // PUT /api/cart/items/{cartItemId} — update qty item
+    public function updateItem(Request $request, $cartItemId)
     {
-        $cart = Cart::where('user_id', Auth::id())->first();
+        $request->validate([
+            'quantity' => 'required|integer|min:1',
+        ]);
 
-        if (!$cart) {
-            return response()->json(['status' => false, 'message' => 'Cart not found'], 404);
-        }
+        $cart = Cart::where('user_id', $request->user()->id)->firstOrFail();
+        $item = CartItem::where('id', $cartItemId)
+            ->where('cart_id', $cart->id)
+            ->firstOrFail();
 
-        $items = array_filter($cart->items, function ($item) use ($menu_id) {
-            return $item['menu_id'] !== $menu_id;
-        });
+        $item->update(['quantity' => $request->quantity]);
 
-        $cart->items = array_values($items);
-        $cart->save();
+        return response()->json([
+            'status'  => true,
+            'message' => 'Quantity diupdate',
+            'data'    => $item,
+        ]);
+    }
 
-        return response()->json(['status' => true, 'message' => 'Item removed from cart']);
+    // DELETE /api/cart/items/{cartItemId} — hapus item dari cart
+    public function removeItem(Request $request, $cartItemId)
+    {
+        $cart = Cart::where('user_id', $request->user()->id)->firstOrFail();
+        $item = CartItem::where('id', $cartItemId)
+            ->where('cart_id', $cart->id)
+            ->firstOrFail();
+
+        $item->delete();
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Item dihapus dari cart',
+        ]);
     }
 }

@@ -2,21 +2,14 @@
 
 namespace App\Models;
 
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Model;
 
 class Cart extends Model
 {
-    protected $fillable = [
-        'user_id',
-        'items',
-    ];
+    protected $fillable = ['user_id'];
 
-    protected $casts = [
-        'items' => 'array',
-    ];
-
-    public function user()
+    public function items()
     {
-        return $this->belongsTo(User::class);
+        return $this->hasMany(CartItem::class);
     }
 }

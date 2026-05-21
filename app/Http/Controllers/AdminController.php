@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Menu;
 use App\Models\Order;
-use App\Models\OrderHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -16,8 +15,7 @@ class AdminController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'required|string',
             'price' => 'required|numeric',
-            'stock' => 'required|integer',
-            'category' => 'required|string',
+            'is_available' => 'boolean',
         ]);
 
         $menu = Menu::create($request->all());
@@ -79,20 +77,12 @@ class AdminController extends Controller
             return response()->json(['status' => false, 'message' => 'Order not found'], 404);
         }
 
-        $oldStatus = $order->status;
-        $order->status = 'confirmed';
+        $order->status = 'processing';
         $order->save();
-
-        OrderHistory::create([
-            'order_id' => $order->id,
-            'old_status' => $oldStatus,
-            'new_status' => 'confirmed',
-            'updated_by' => Auth::id(),
-        ]);
 
         return response()->json([
             'status' => true,
-            'message' => 'Pesanan berhasil dikonfirmasi',
+            'message' => 'Pesanan berhasil dikonfirmasi (processing)',
             'data' => $order
         ]);
     }
@@ -100,7 +90,7 @@ class AdminController extends Controller
     public function updateOrderStatus(Request $request, $id)
     {
         $request->validate([
-            'status' => 'required|string|in:cooking,delivering,completed,cancelled'
+            'status' => 'required|string|in:pending,processing,done,cancelled'
         ]);
 
         $order = Order::find($id);
@@ -109,16 +99,8 @@ class AdminController extends Controller
             return response()->json(['status' => false, 'message' => 'Order not found'], 404);
         }
 
-        $oldStatus = $order->status;
         $order->status = $request->status;
         $order->save();
-
-        OrderHistory::create([
-            'order_id' => $order->id,
-            'old_status' => $oldStatus,
-            'new_status' => $request->status,
-            'updated_by' => Auth::id(),
-        ]);
 
         return response()->json([
             'status' => true,
