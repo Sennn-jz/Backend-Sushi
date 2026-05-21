@@ -187,4 +187,35 @@ class OrderController extends Controller
             'data'   => $orders,
         ]);
     }
+    // PUT /api/orders/{orderCode}/cancel
+    // Membatalkan pesanan yang masih berstatus 'pending'
+    public function cancel(Request $request, $orderCode)
+    {
+        // Cari order milik user yang sedang login berdasarkan order_code
+        $order = Order::where('order_code', $orderCode)
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        // Validasi: Hanya order yang masih 'pending' yang boleh dibatalkan
+        if ($order->status !== 'pending') {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Pesanan tidak dapat dibatalkan karena status sudah ' . $order->status,
+            ], 400);
+        }
+
+        // Update status menjadi cancelled
+        $order->update([
+            'status' => 'cancelled'
+        ]);
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Pesanan ' . $orderCode . ' berhasil dibatalkan',
+            'data'    => [
+                'order_code' => $order->order_code,
+                'status'     => $order->status
+            ]
+        ]);
+    }
 }
