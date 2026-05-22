@@ -33,6 +33,29 @@ class OrderController extends Controller
     }
 
     // =====================================================
+    // SEARCH MENU
+    // GET /api/menus/search?keyword=salmon
+    // =====================================================
+    public function searchMenus(Request $request)
+    {
+        $request->validate([
+            'keyword' => 'required|string'
+        ]);
+
+        $keyword = $request->keyword;
+
+        $menus = Menu::where('name', 'like', '%' . $keyword . '%')
+            ->where('is_available', true)
+            ->get();
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Hasil pencarian menu',
+            'data'    => $menus
+        ]);
+    }
+
+    // =====================================================
     // PATH A: Bayar Langsung (tanpa cart)
     // POST /api/orders
     // =====================================================
@@ -48,20 +71,25 @@ class OrderController extends Controller
         ]);
 
         DB::beginTransaction();
+
         try {
+
             // 1. Hitung total
             $total = 0;
             $itemsData = [];
 
             foreach ($request->items as $item) {
+
                 $menu = Menu::findOrFail($item['menu_id']);
+
                 $subtotal = $menu->price * $item['quantity'];
+
                 $total += $subtotal;
 
                 $itemsData[] = [
                     'menu_id'  => $item['menu_id'],
                     'quantity' => $item['quantity'],
-                    'price'    => $menu->price,  // snapshot harga
+                    'price'    => $menu->price,
                 ];
             }
 
@@ -77,7 +105,11 @@ class OrderController extends Controller
 
             // 3. Simpan order items
             foreach ($itemsData as $itemData) {
-                OrderItem::create(array_merge($itemData, ['order_id' => $order->id]));
+
+                OrderItem::create(array_merge(
+                    $itemData,
+                    ['order_id' => $order->id]
+                ));
             }
 
             // 4. Simpan payment
@@ -98,7 +130,9 @@ class OrderController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+
             DB::rollBack();
+
             return response()->json([
                 'status'  => false,
                 'message' => 'Gagal membuat pesanan: ' . $e->getMessage(),
@@ -123,6 +157,7 @@ class OrderController extends Controller
             ->firstOrFail();
 
         if ($cart->items->isEmpty()) {
+
             return response()->json([
                 'status'  => false,
                 'message' => 'Cart kosong, tidak bisa checkout',
@@ -130,7 +165,9 @@ class OrderController extends Controller
         }
 
         DB::beginTransaction();
+
         try {
+
             // 1. Hitung total dari cart
             $total = $cart->items->sum(
                 fn($item) => $item->menu->price * $item->quantity
@@ -146,8 +183,9 @@ class OrderController extends Controller
                 'status'        => 'pending',
             ]);
 
-            // 3. Pindahkan cart items → order items (snapshot harga)
+            // 3. Pindahkan cart items → order items
             foreach ($cart->items as $cartItem) {
+
                 OrderItem::create([
                     'order_id' => $order->id,
                     'menu_id'  => $cartItem->menu_id,
@@ -177,7 +215,9 @@ class OrderController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+
             DB::rollBack();
+
             return response()->json([
                 'status'  => false,
                 'message' => 'Gagal checkout: ' . $e->getMessage(),
@@ -218,7 +258,6 @@ class OrderController extends Controller
     }
 
     // PUT /api/orders/{orderCode}/cancel
-    // Membatalkan pesanan yang masih berstatus 'pending'
     public function cancel(Request $request, $orderCode)
     {
         $order = Order::where('order_code', $orderCode)
@@ -226,6 +265,7 @@ class OrderController extends Controller
             ->firstOrFail();
 
         if ($order->status !== 'pending') {
+
             return response()->json([
                 'status'  => false,
                 'message' => 'Pesanan tidak dapat dibatalkan karena status sudah ' . $order->status,
@@ -238,7 +278,7 @@ class OrderController extends Controller
 
         return response()->json([
             'status'  => true,
-            'message' => 'Pesanan ' . $orderCode . ' berhasil dibatalkan',
+            'message' => 'Pesanan berhasil dibatalkan',
             'data'    => [
                 'order_code' => $order->order_code,
                 'status'     => $order->status
@@ -247,7 +287,7 @@ class OrderController extends Controller
     }
 
     // =====================================================
-    // ADMIN ACTIONS (Wajib Middleware IsAdmin)
+    // ADMIN ACTIONS
     // =====================================================
 
     // PUT /api/admin/orders/{orderCode}/status
@@ -258,7 +298,7 @@ class OrderController extends Controller
         ]);
 
         $order = Order::where('order_code', $orderCode)->firstOrFail();
-        
+
         $order->update([
             'status' => $request->status
         ]);
@@ -273,4 +313,4 @@ class OrderController extends Controller
             ]
         ]);
     }
-} // ← Penutup class yang benar ada di sini sekarang
+}
