@@ -3,8 +3,9 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+// ✅ Tambahkan import Laravel Sanctum model asli di bawah ini
 use Laravel\Sanctum\Sanctum;
-use App\Models\PersonalAccessToken;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -21,6 +22,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // ✅ PAKSA Laravel Sanctum untuk selalu menggunakan model MySQL asli bawaan framework
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
     }
 }
