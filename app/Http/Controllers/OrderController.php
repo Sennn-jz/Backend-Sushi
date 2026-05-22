@@ -1,12 +1,37 @@
 <?php
+
 namespace App\Http\Controllers;
-use App\Models\{Cart, CartItem, Order, OrderItem, Payment};
+
+// Di sini semua model di-import dengan rapi
+use App\Models\Cart;
+use App\Models\CartItem;
+use App\Models\Menu;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
+    // =====================================================
+    // GUEST / PUBLIC ROUTES
+    // =====================================================
+
+    // GET /api/menus
+    // Menampilkan semua menu yang tersedia untuk customer (Bisa diakses tanpa login)
+    public function indexMenus()
+    {
+        $menus = Menu::where('is_available', true)->get();
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Daftar menu Sushilisious',
+            'data'    => $menus
+        ]);
+    }
+
     // =====================================================
     // PATH A: Bayar Langsung (tanpa cart)
     // POST /api/orders
@@ -29,7 +54,7 @@ class OrderController extends Controller
             $itemsData = [];
 
             foreach ($request->items as $item) {
-                $menu = \App\Models\Menu::findOrFail($item['menu_id']);
+                $menu = Menu::findOrFail($item['menu_id']);
                 $subtotal = $menu->price * $item['quantity'];
                 $total += $subtotal;
 
@@ -160,19 +185,9 @@ class OrderController extends Controller
         }
     }
 
-    // Lihat detail pesanan milik user
-    public function show(Request $request, $orderId)
-    {
-        $order = Order::where('id', $orderId)
-            ->where('user_id', $request->user()->id)
-            ->with('items.menu', 'payment')
-            ->firstOrFail();
-
-        return response()->json([
-            'status' => true,
-            'data'   => $order,
-        ]);
-    }
+    // =====================================================
+    // CUSTOMER HISTORY & ACTIONS
+    // =====================================================
 
     // Lihat semua pesanan milik user
     public function myOrders(Request $request)
@@ -187,16 +202,29 @@ class OrderController extends Controller
             'data'   => $orders,
         ]);
     }
+
+    // Lihat detail pesanan milik user
+    public function show(Request $request, $orderId)
+    {
+        $order = Order::where('id', $orderId)
+            ->where('user_id', $request->user()->id)
+            ->with('items.menu', 'payment')
+            ->firstOrFail();
+
+        return response()->json([
+            'status' => true,
+            'data'   => $order,
+        ]);
+    }
+
     // PUT /api/orders/{orderCode}/cancel
     // Membatalkan pesanan yang masih berstatus 'pending'
     public function cancel(Request $request, $orderCode)
     {
-        // Cari order milik user yang sedang login berdasarkan order_code
         $order = Order::where('order_code', $orderCode)
             ->where('user_id', $request->user()->id)
             ->firstOrFail();
 
-        // Validasi: Hanya order yang masih 'pending' yang boleh dibatalkan
         if ($order->status !== 'pending') {
             return response()->json([
                 'status'  => false,
@@ -204,7 +232,6 @@ class OrderController extends Controller
             ], 400);
         }
 
-        // Update status menjadi cancelled
         $order->update([
             'status' => 'cancelled'
         ]);
@@ -218,4 +245,32 @@ class OrderController extends Controller
             ]
         ]);
     }
-}
+
+    // =====================================================
+    // ADMIN ACTIONS (Wajib Middleware IsAdmin)
+    // =====================================================
+
+    // PUT /api/admin/orders/{orderCode}/status
+    public function updateStatus(Request $request, $orderCode)
+    {
+        $request->validate([
+            'status' => 'required|in:confirmed,completed,cancelled'
+        ]);
+
+        $order = Order::where('order_code', $orderCode)->firstOrFail();
+        
+        $order->update([
+            'status' => $request->status
+        ]);
+
+        return response()->json([
+            'status'  => true,
+            'message' => "Status pesanan {$orderCode} berhasil diperbarui menjadi {$request->status}",
+            'data'    => [
+                'order_code' => $order->order_code,
+                'status'     => $order->status,
+                'updated_at' => $order->updated_at
+            ]
+        ]);
+    }
+} // ← Penutup class yang benar ada di sini sekarang
