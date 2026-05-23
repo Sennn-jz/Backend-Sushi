@@ -47,13 +47,18 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::middleware('auth:sanctum')->group(function () {
 
     // =================================================
-    // AUTH
+    // AUTH & NOTIFICATIONS
     // =================================================
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
-    Route::get('/user', function (Request $request) {
-        return $request->user();
-    });
+    // Endpoint Profile: Menampilkan data user sekaligus notifikasinya
+    Route::get('/user/profile', [AuthController::class, 'profile']);
+
+    // Endpoint Update Profile: Mengubah pengaturan akun user (Baru Ditambahkan)
+    Route::put('/user/profile/update', [AuthController::class, 'updateProfile']);
+
+    // ENDPOINT NOTIFIKASI (Murni list notifikasi saja)
+    Route::get('/notifications', [AuthController::class, 'getNotifications']);
 
 
     // =================================================
@@ -61,8 +66,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // =================================================
     Route::get('/cart', [CartController::class, 'index']);
 
+    // Menambahkan menu langsung ke keranjang dari home screen
     Route::post('/cart/items', [CartController::class, 'addItem']);
 
+    // Mengubah jumlah item / menambahkan variasi add-on di keranjang
     Route::put('/cart/items/{cartItemId}', [CartController::class, 'updateItem']);
 
     Route::delete('/cart/items/{cartItemId}', [CartController::class, 'removeItem']);
@@ -75,6 +82,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // =================================================
     Route::post('/orders', [OrderController::class, 'store']);
 
+    // Melakukan checkout langsung dari data keranjang belanja
     Route::post('/cart/checkout', [OrderController::class, 'checkoutFromCart']);
 
     Route::get('/orders', [OrderController::class, 'myOrders']);
@@ -82,6 +90,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders/{orderId}', [OrderController::class, 'show']);
 
     Route::put('/orders/{orderCode}/cancel', [OrderController::class, 'cancel']);
+
+    // ENDPOINT ORDER HISTORY (Melihat riwayat pesanan dari profil)
+    Route::get('/orders/history/all', [OrderController::class, 'history']);
 
 
     // =================================================
@@ -133,7 +144,9 @@ Route::middleware(['auth:sanctum', 'ability:admin'])
         // =============================================
         Route::get('/orders', [AdminController::class, 'getOrders']);
 
+        // Menyetujui/mengonfirmasi pesanan masuk
         Route::put('/orders/{id}/confirm', [AdminController::class, 'confirmOrder']);
 
+        // Memperbarui status pengiriman/pembuatan makanan
         Route::put('/orders/{orderCode}/status', [OrderController::class, 'updateStatus']);
     });
