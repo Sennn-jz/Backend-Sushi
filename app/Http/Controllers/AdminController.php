@@ -69,6 +69,10 @@ class AdminController extends Controller
         ]);
     }
 
+    // =====================================================
+    // CONFIRM ORDER (Revisi Admin Dashboard No. 3)
+    // PUT /api/admin/orders/{id}/confirm
+    // =====================================================
     public function confirmOrder(Request $request, $id)
     {
         $order = Order::find($id);
@@ -77,13 +81,29 @@ class AdminController extends Controller
             return response()->json(['status' => false, 'message' => 'Order not found'], 404);
         }
 
-        $order->status = 'processing';
+        // Memastikan pesanan hanya bisa dikonfirmasi jika statusnya masih pending
+        if ($order->status !== 'pending') {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Pesanan tidak bisa dikonfirmasi karena statusnya sudah ' . $order->status
+            ], 400);
+        }
+
+        // Mengubah status pesanan menjadi 'confirmed' sesuai revisi admin
+        $order->status = 'confirmed';
         $order->save();
+
+        // Otomatis update status pembayaran menjadi sukses jika ada relasi payment
+        if ($order->payment) {
+            $order->payment->update([
+                'status' => 'success'
+            ]);
+        }
 
         return response()->json([
             'status' => true,
-            'message' => 'Pesanan berhasil dikonfirmasi (processing)',
-            'data' => $order
+            'message' => 'Pesanan berhasil dikonfirmasi oleh Admin (Status: confirmed)',
+            'data' => $order->load('payment')
         ]);
     }
 

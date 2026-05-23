@@ -72,6 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Mengubah jumlah item / menambahkan variasi add-on di keranjang
     Route::put('/cart/items/{cartItemId}', [CartController::class, 'updateItem']);
 
+    // Mengubah jumlah item / menambahkan variasi add-on di keranjang
     Route::delete('/cart/items/{cartItemId}', [CartController::class, 'removeItem']);
 
     Route::delete('/cart', [CartController::class, 'clearCart']);
@@ -142,7 +143,8 @@ Route::middleware(['auth:sanctum', 'ability:admin'])
         // =============================================
         // MANAGE ORDERS
         // =============================================
-        Route::get('/orders', [AdminController::class, 'getOrders']);
+        // Mengarahkan ke OrderController agar sinkron dengan fungsi penarik riwayat semua data transaksi
+        Route::get('/orders', [OrderController::class, 'getOrders']);
 
         // Menyetujui/mengonfirmasi pesanan masuk
         Route::put('/orders/{id}/confirm', [AdminController::class, 'confirmOrder']);

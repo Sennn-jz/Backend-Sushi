@@ -33,8 +33,8 @@ class OrderController extends Controller
     }
 
     // =====================================================
-    // SEARCH MENU
-    // GET /api/menus/search?keyword=salmon
+    // SEARCH MENU (Revisi Home Screen No. 2: Bisa ID / Nama)
+    // GET /api/menus/search?keyword=salmon atau ?keyword=3
     // =====================================================
     public function searchMenus(Request $request)
     {
@@ -44,7 +44,9 @@ class OrderController extends Controller
 
         $keyword = $request->keyword;
 
-        $menus = Menu::where('name', 'like', '%' . $keyword . '%')
+        // Ditambahkan pencarian berdasarkan ID menu atau nama menu yang mirip
+        $menus = Menu::where('id', $keyword)
+            ->orWhere('name', 'like', '%' . $keyword . '%')
             ->where('is_available', true)
             ->get();
 
@@ -123,7 +125,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'status'      => true,
-                'message'     => 'Pesanan berhasil dibuat',
+                'message' => 'Pesanan berhasil dibuat',
                 'order_code'  => $order->order_code,
                 'total_price' => $order->total_price,
                 'data'        => $order->load('items.menu', 'payment'),
@@ -286,9 +288,40 @@ class OrderController extends Controller
         ]);
     }
 
+    // ENDPOINT ORDER HISTORY (Melihat riwayat pesanan dari profil user)
+    // GET /api/orders/history/all
+    public function history(Request $request)
+    {
+        $history = Order::where('user_id', $request->user()->id)
+            ->with('items.menu', 'payment')
+            ->whereIn('status', ['completed', 'cancelled']) // Menampilkan transaksi yang sudah selesai/batal
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Riwayat transaksi user berhasil diambil',
+            'data'    => $history
+        ]);
+    }
+
     // =====================================================
     // ADMIN ACTIONS
     // =====================================================
+
+    // GET /api/admin/orders (Admin Dashboard No. 2: Riwayat Semua Transaksi)
+    public function getOrders()
+    {
+        $orders = Order::with('items.menu', 'payment', 'user')
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Seluruh riwayat transaksi berhasil diambil oleh Admin',
+            'data'    => $orders
+        ]);
+    }
 
     // PUT /api/admin/orders/{orderCode}/status
     public function updateStatus(Request $request, $orderCode)
