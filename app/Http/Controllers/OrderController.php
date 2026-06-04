@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-// Di sini semua model di-import dengan rapi
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Menu;
@@ -20,7 +19,6 @@ class OrderController extends Controller
     // =====================================================
 
     // GET /api/menus
-    // Menampilkan semua menu yang tersedia untuk customer (Bisa diakses tanpa login)
     public function indexMenus()
     {
         $menus = Menu::where('is_available', true)->get();
@@ -33,8 +31,8 @@ class OrderController extends Controller
     }
 
     // =====================================================
-    // SEARCH MENU (Revisi Home Screen No. 2: Bisa ID / Nama)
-    // GET /api/menus/search?keyword=salmon atau ?keyword=3
+    // SEARCH MENU
+    // GET /api/menus/search?keyword=salmon
     // =====================================================
     public function searchMenus(Request $request)
     {
@@ -44,10 +42,11 @@ class OrderController extends Controller
 
         $keyword = $request->keyword;
 
-        // Ditambahkan pencarian berdasarkan ID menu atau nama menu yang mirip
-        $menus = Menu::where('id', $keyword)
-            ->orWhere('name', 'like', '%' . $keyword . '%')
-            ->where('is_available', true)
+        $menus = Menu::where('is_available', true)
+            ->where(function ($query) use ($keyword) {
+                $query->where('id', $keyword)
+                      ->orWhere('name', 'like', '%' . $keyword . '%');
+            })
             ->get();
 
         return response()->json([
@@ -64,10 +63,10 @@ class OrderController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'customer_name'  => 'required|string|max:255',
-            'address'        => 'required|string',
-            'payment_method' => 'required|in:cash,transfer,qris',
-            'items'          => 'required|array|min:1',
+            'customer_name'    => 'required|string|max:255',
+            'address'          => 'required|string',
+            'payment_method'   => 'required|in:cash,transfer,qris',
+            'items'            => 'required|array|min:1',
             'items.*.menu_id'  => 'required|exists:menus,id',
             'items.*.quantity' => 'required|integer|min:1',
         ]);
@@ -76,18 +75,13 @@ class OrderController extends Controller
 
         try {
 
-            // 1. Hitung total
             $total = 0;
             $itemsData = [];
 
             foreach ($request->items as $item) {
-
                 $menu = Menu::findOrFail($item['menu_id']);
-
                 $subtotal = $menu->price * $item['quantity'];
-
                 $total += $subtotal;
-
                 $itemsData[] = [
                     'menu_id'  => $item['menu_id'],
                     'quantity' => $item['quantity'],
@@ -95,7 +89,6 @@ class OrderController extends Controller
                 ];
             }
 
-            // 2. Buat order + generate order_code unik
             $order = Order::create([
                 'user_id'       => $request->user()->id,
                 'order_code'    => 'ORD-' . strtoupper(Str::random(8)),
@@ -105,16 +98,13 @@ class OrderController extends Controller
                 'status'        => 'pending',
             ]);
 
-            // 3. Simpan order items
             foreach ($itemsData as $itemData) {
-
                 OrderItem::create(array_merge(
                     $itemData,
                     ['order_id' => $order->id]
                 ));
             }
 
-            // 4. Simpan payment
             Payment::create([
                 'order_id'       => $order->id,
                 'payment_method' => $request->payment_method,
@@ -125,7 +115,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'status'      => true,
-                'message' => 'Pesanan berhasil dibuat',
+                'message'     => 'Pesanan berhasil dibuat',
                 'order_code'  => $order->order_code,
                 'total_price' => $order->total_price,
                 'data'        => $order->load('items.menu', 'payment'),
@@ -159,7 +149,6 @@ class OrderController extends Controller
             ->firstOrFail();
 
         if ($cart->items->isEmpty()) {
-
             return response()->json([
                 'status'  => false,
                 'message' => 'Cart kosong, tidak bisa checkout',
@@ -170,12 +159,10 @@ class OrderController extends Controller
 
         try {
 
-            // 1. Hitung total dari cart
             $total = $cart->items->sum(
                 fn($item) => $item->menu->price * $item->quantity
             );
 
-            // 2. Buat order + generate order_code unik
             $order = Order::create([
                 'user_id'       => $request->user()->id,
                 'order_code'    => 'ORD-' . strtoupper(Str::random(8)),
@@ -185,9 +172,7 @@ class OrderController extends Controller
                 'status'        => 'pending',
             ]);
 
-            // 3. Pindahkan cart items → order items
             foreach ($cart->items as $cartItem) {
-
                 OrderItem::create([
                     'order_id' => $order->id,
                     'menu_id'  => $cartItem->menu_id,
@@ -196,14 +181,12 @@ class OrderController extends Controller
                 ]);
             }
 
-            // 4. Simpan payment
             Payment::create([
                 'order_id'       => $order->id,
                 'payment_method' => $request->payment_method,
                 'status'         => 'pending',
             ]);
 
-            // 5. Kosongkan cart setelah checkout
             $cart->items()->delete();
 
             DB::commit();
@@ -231,7 +214,6 @@ class OrderController extends Controller
     // CUSTOMER HISTORY & ACTIONS
     // =====================================================
 
-    // Lihat semua pesanan milik user
     public function myOrders(Request $request)
     {
         $orders = Order::where('user_id', $request->user()->id)
@@ -245,7 +227,6 @@ class OrderController extends Controller
         ]);
     }
 
-    // Lihat detail pesanan milik user
     public function show(Request $request, $orderId)
     {
         $order = Order::where('id', $orderId)
@@ -259,7 +240,6 @@ class OrderController extends Controller
         ]);
     }
 
-    // PUT /api/orders/{orderCode}/cancel
     public function cancel(Request $request, $orderCode)
     {
         $order = Order::where('order_code', $orderCode)
@@ -267,16 +247,13 @@ class OrderController extends Controller
             ->firstOrFail();
 
         if ($order->status !== 'pending') {
-
             return response()->json([
                 'status'  => false,
                 'message' => 'Pesanan tidak dapat dibatalkan karena status sudah ' . $order->status,
             ], 400);
         }
 
-        $order->update([
-            'status' => 'cancelled'
-        ]);
+        $order->update(['status' => 'cancelled']);
 
         return response()->json([
             'status'  => true,
@@ -288,13 +265,12 @@ class OrderController extends Controller
         ]);
     }
 
-    // ENDPOINT ORDER HISTORY (Melihat riwayat pesanan dari profil user)
     // GET /api/orders/history/all
     public function history(Request $request)
     {
         $history = Order::where('user_id', $request->user()->id)
             ->with('items.menu', 'payment')
-            ->whereIn('status', ['completed', 'cancelled']) // Menampilkan transaksi yang sudah selesai/batal
+            ->whereIn('status', ['completed', 'cancelled'])
             ->latest()
             ->get();
 
@@ -309,7 +285,6 @@ class OrderController extends Controller
     // ADMIN ACTIONS
     // =====================================================
 
-    // GET /api/admin/orders (Admin Dashboard No. 2: Riwayat Semua Transaksi)
     public function getOrders()
     {
         $orders = Order::with('items.menu', 'payment', 'user')
@@ -323,7 +298,6 @@ class OrderController extends Controller
         ]);
     }
 
-    // PUT /api/admin/orders/{orderCode}/status
     public function updateStatus(Request $request, $orderCode)
     {
         $request->validate([
@@ -332,9 +306,7 @@ class OrderController extends Controller
 
         $order = Order::where('order_code', $orderCode)->firstOrFail();
 
-        $order->update([
-            'status' => $request->status
-        ]);
+        $order->update(['status' => $request->status]);
 
         return response()->json([
             'status'  => true,
