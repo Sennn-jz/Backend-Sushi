@@ -31,17 +31,40 @@ class CartController extends Controller
         ]);
     }
 
-    // =========================
-    // ADD TO CART (DEBUG MODE)
-    // =========================
+    // ADD TO CART
     public function addItem(Request $request)
     {
-        // 🔥 DEBUG CHECK (INI PENTING)
-        dd([
-            'request_data' => $request->all(),
-            'user' => $request->user(),
-            'headers' => $request->headers->all()
+        $request->validate([
+            'menu_id'  => 'required|exists:menus,id',
+            'quantity' => 'required|integer|min:1',
         ]);
+
+        $cart = Cart::firstOrCreate([
+            'user_id' => $request->user()->id
+        ]);
+
+        $existingItem = CartItem::where('cart_id', $cart->id)
+            ->where('menu_id', $request->menu_id)
+            ->first();
+
+        if ($existingItem) {
+            $existingItem->update([
+                'quantity' => $existingItem->quantity + $request->quantity
+            ]);
+            $item = $existingItem;
+        } else {
+            $item = CartItem::create([
+                'cart_id'  => $cart->id,
+                'menu_id'  => $request->menu_id,
+                'quantity' => $request->quantity,
+            ]);
+        }
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Item berhasil ditambahkan ke cart',
+            'data'    => $item->load('menu')
+        ], 201);
     }
 
     // UPDATE ITEM
@@ -62,9 +85,9 @@ class CartController extends Controller
         ]);
 
         return response()->json([
-            'status' => true,
+            'status'  => true,
             'message' => 'Quantity diupdate',
-            'data' => $item
+            'data'    => $item
         ]);
     }
 
@@ -80,8 +103,23 @@ class CartController extends Controller
         $item->delete();
 
         return response()->json([
-            'status' => true,
+            'status'  => true,
             'message' => 'Item dihapus dari cart'
+        ]);
+    }
+
+    // CLEAR CART
+    public function clearCart(Request $request)
+    {
+        $cart = Cart::where('user_id', $request->user()->id)->first();
+
+        if ($cart) {
+            $cart->items()->delete();
+        }
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Cart dikosongkan'
         ]);
     }
 }
