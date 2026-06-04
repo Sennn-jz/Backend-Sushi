@@ -36,12 +36,7 @@ class AuthController extends Controller
         return response()->json([
             'status' => true,
             'message' => 'Register berhasil',
-            'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'username' => $user->username,
-                'email' => $user->email,
-            ]
+            'data' => $user
         ], 201);
     }
 
@@ -56,12 +51,13 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // ✅ FIX PENTING DI SINI
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'status' => true,
             'message' => 'Login berhasil',
-            'token' => 'Bearer ' . $token,
+            'token' => $token,   // ❗ TANPA "Bearer "
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -81,9 +77,6 @@ class AuthController extends Controller
         ]);
     }
 
-    // ==========================================================
-    // NOTIFICATION LOGIC
-    // ==========================================================
     public function getNotifications(Request $request)
     {
         $user = $request->user();
@@ -97,12 +90,9 @@ class AuthController extends Controller
             'status'  => true,
             'message' => 'Berhasil mengambil data notifikasi',
             'data'    => $notifications
-        ], 200);
+        ]);
     }
 
-    // ==========================================================
-    // USER PROFILE LOGIC
-    // ==========================================================
     public function profile(Request $request)
     {
         $user = $request->user();
@@ -118,37 +108,25 @@ class AuthController extends Controller
             ->get();
 
         return response()->json([
-            'status'  => true,
-            'message' => 'Berhasil mengambil profil, notifikasi, dan riwayat pesanan',
-            'data'    => [
-                'user' => [
-                    'id'       => $user->id,
-                    'name'     => $user->name,
-                    'username' => $user->username,
-                    'email'    => $user->email,
-                    'role'     => $user->role,
-                    'phone'    => $user->phone,
-                    'address'  => $user->address,
-                ],
+            'status' => true,
+            'data' => [
+                'user' => $user,
                 'notifications' => $notifications,
                 'order_history' => $orderHistory
             ]
-        ], 200);
+        ]);
     }
 
-    // ==========================================================
-    // UPDATE ACCOUNT SETTINGS
-    // ==========================================================
     public function updateProfile(Request $request)
     {
         $user = $request->user();
 
         $validator = Validator::make($request->all(), [
-            'name'     => 'required|string|max:255',
+            'name' => 'required|string|max:255',
             'username' => 'required|string|max:255|unique:users,username,' . $user->id,
-            'email'    => 'required|string|email|max:255|unique:users,email,' . $user->id,
-            'phone'    => 'nullable|string|max:15',
-            'address'  => 'nullable|string',
+            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:15',
+            'address' => 'nullable|string',
             'password' => 'nullable|string|min:8|confirmed',
         ]);
 
@@ -157,11 +135,11 @@ class AuthController extends Controller
         }
 
         $updateData = [
-            'name'     => $request->name,
+            'name' => $request->name,
             'username' => $request->username,
-            'email'    => $request->email,
-            'phone'    => $request->phone,
-            'address'  => $request->address,
+            'email' => $request->email,
+            'phone' => $request->phone,
+            'address' => $request->address,
         ];
 
         if ($request->filled('password')) {
@@ -170,20 +148,9 @@ class AuthController extends Controller
 
         User::where('id', $user->id)->update($updateData);
 
-        $updatedUser = $user->fresh();
-
         return response()->json([
-            'status'  => true,
-            'message' => 'Profil akun berhasil diperbarui!',
-            'data'    => [
-                'id'       => $updatedUser->id,
-                'name'     => $updatedUser->name,
-                'username' => $updatedUser->username,
-                'email'    => $updatedUser->email,
-                'role'     => $updatedUser->role,
-                'phone'    => $updatedUser->phone,
-                'address'  => $updatedUser->address,
-            ]
-        ], 200);
+            'status' => true,
+            'message' => 'Profile updated'
+        ]);
     }
 }
