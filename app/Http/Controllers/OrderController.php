@@ -18,7 +18,6 @@ class OrderController extends Controller
     // GUEST / PUBLIC ROUTES
     // =====================================================
 
-    // GET /api/menus
     public function indexMenus()
     {
         $menus = Menu::where('is_available', true)->get();
@@ -113,6 +112,16 @@ class OrderController extends Controller
 
             DB::commit();
 
+            // ✅ Insert notifikasi setelah order berhasil
+            DB::table('notifications')->insert([
+                'user_id'    => $request->user()->id,
+                'title'      => 'Pesanan Berhasil Dibuat! 🛒',
+                'message'    => 'Pesanan kamu ' . $order->order_code . ' senilai Rp ' . number_format($total, 0, ',', '.') . ' sedang diproses.',
+                'is_read'    => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
             return response()->json([
                 'status'      => true,
                 'message'     => 'Pesanan berhasil dibuat',
@@ -191,6 +200,16 @@ class OrderController extends Controller
 
             DB::commit();
 
+            // ✅ Insert notifikasi setelah checkout berhasil
+            DB::table('notifications')->insert([
+                'user_id'    => $request->user()->id,
+                'title'      => 'Pesanan Berhasil! 🍣',
+                'message'    => 'Pesanan kamu ' . $order->order_code . ' senilai Rp ' . number_format($total, 0, ',', '.') . ' sedang diproses. Terima kasih!',
+                'is_read'    => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
             return response()->json([
                 'status'      => true,
                 'message'     => 'Checkout berhasil',
@@ -255,6 +274,16 @@ class OrderController extends Controller
 
         $order->update(['status' => 'cancelled']);
 
+        // ✅ Insert notifikasi saat order dibatalkan
+        DB::table('notifications')->insert([
+            'user_id'    => $request->user()->id,
+            'title'      => 'Pesanan Dibatalkan',
+            'message'    => 'Pesanan kamu ' . $order->order_code . ' telah dibatalkan.',
+            'is_read'    => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         return response()->json([
             'status'  => true,
             'message' => 'Pesanan berhasil dibatalkan',
@@ -265,7 +294,6 @@ class OrderController extends Controller
         ]);
     }
 
-    // GET /api/orders/history/all
     public function history(Request $request)
     {
         $history = Order::where('user_id', $request->user()->id)
@@ -307,6 +335,16 @@ class OrderController extends Controller
         $order = Order::where('order_code', $orderCode)->firstOrFail();
 
         $order->update(['status' => $request->status]);
+
+        // ✅ Insert notifikasi saat admin update status
+        DB::table('notifications')->insert([
+            'user_id'    => $order->user_id,
+            'title'      => 'Status Pesanan Diperbarui',
+            'message'    => 'Pesanan ' . $order->order_code . ' sekarang berstatus ' . $request->status . '.',
+            'is_read'    => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         return response()->json([
             'status'  => true,
