@@ -5,6 +5,7 @@ use App\Http\Controllers\WebAdmin\AuthController;
 use App\Http\Controllers\WebAdmin\DashboardController;
 use App\Http\Controllers\WebAdmin\MenuController;
 use App\Http\Controllers\WebAdmin\OrderController;
+use App\Http\Controllers\WebAdmin\UserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,6 +37,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         
         Route::resource('orders', OrderController::class)->only(['index', 'show']);
         Route::put('orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.updateStatus');
+
+        Route::resource('users', UserController::class)->only(['index']);
     });
 });
  

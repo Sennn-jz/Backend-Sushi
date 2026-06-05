@@ -55,11 +55,11 @@
                         <div class="flex text-sm text-gray-600 justify-center">
                             <label for="file-upload" class="relative cursor-pointer rounded-md font-medium text-orange-500 hover:text-orange-600 focus-within:outline-none">
                                 <span>Upload a file</span>
-                                <input id="file-upload" name="image" type="file" class="sr-only" accept="image/*">
+                                <input id="file-upload" name="image" type="file" class="sr-only" accept="image/*" onchange="document.getElementById('file-name').textContent = this.files[0] ? 'Selected: ' + this.files[0].name : 'PNG, JPG, WEBP up to 2MB'; document.getElementById('file-name').classList.replace('text-gray-500', 'text-orange-500');">
                             </label>
                             <p class="pl-1">or drag and drop</p>
                         </div>
-                        <p class="text-xs text-gray-500">PNG, JPG, WEBP up to 2MB</p>
+                        <p id="file-name" class="text-xs text-gray-500 mt-2">PNG, JPG, WEBP up to 2MB</p>
                     </div>
                 </div>
                 @error('image') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror

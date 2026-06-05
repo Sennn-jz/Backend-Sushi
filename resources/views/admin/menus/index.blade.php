@@ -12,6 +12,12 @@
 </div>
 
 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="p-4 border-b border-gray-100 bg-white">
+        <form action="{{ route('admin.menus.index') }}" method="GET" class="relative max-w-sm">
+            <input type="text" name="search" value="{{ request('search') }}" placeholder="Search menu by name..." class="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 text-sm transition-colors bg-gray-50 focus:bg-white">
+            <i class="fas fa-search absolute left-3.5 top-3 text-gray-400"></i>
+        </form>
+    </div>
     <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
             <thead>
@@ -53,7 +59,17 @@
                         </div>
                     </td>
                     <td class="py-4 px-6">
-                        <span class="bg-gray-100 text-slate-600 py-1 px-3 rounded-full text-xs font-medium">{{ $menu->category }}</span>
+                        @php
+                            $colorClass = match(strtolower($menu->category)) {
+                                'sushi' => 'bg-red-100 text-red-600',
+                                'sashimi' => 'bg-blue-100 text-blue-600',
+                                'ramen' => 'bg-amber-100 text-amber-600',
+                                'drink' => 'bg-cyan-100 text-cyan-600',
+                                'dessert' => 'bg-pink-100 text-pink-600',
+                                default => 'bg-gray-100 text-slate-600'
+                            };
+                        @endphp
+                        <span class="{{ $colorClass }} py-1 px-3 rounded-full text-xs font-medium">{{ $menu->category ?? 'Uncategorized' }}</span>
                     </td>
                     <td class="py-4 px-6 font-medium text-slate-800">
                         Rp {{ number_format($menu->price, 0, ',', '.') }}

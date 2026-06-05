@@ -37,6 +37,11 @@
                 <i class="fas fa-receipt w-5 text-center mr-3"></i>
                 <span class="font-medium text-sm">Orders</span>
             </a>
+
+            <a href="{{ route('admin.users.index') }}" class="flex items-center px-3 py-2.5 rounded-xl {{ request()->routeIs('admin.users.*') ? 'bg-orange-500 text-white' : 'text-slate-500 hover:bg-gray-50 hover:text-orange-500' }} transition-colors">
+                <i class="fas fa-users w-5 text-center mr-3"></i>
+                <span class="font-medium text-sm">Users</span>
+            </a>
         </nav>
 
         <!-- Logout -->
@@ -59,12 +64,6 @@
                 <button class="md:hidden text-slate-500 hover:text-orange-500 focus:outline-none">
                     <i class="fas fa-bars text-xl"></i>
                 </button>
-                <div class="hidden md:flex relative ml-4">
-                    <span class="absolute inset-y-0 left-0 flex items-center pl-3">
-                        <i class="fas fa-search text-gray-400"></i>
-                    </span>
-                    <input type="text" class="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-xl leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-orange-500 sm:text-sm transition-colors" placeholder="Search...">
-                </div>
             </div>
             
             <div class="flex items-center space-x-4">

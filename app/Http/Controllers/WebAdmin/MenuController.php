@@ -9,9 +9,15 @@ use Illuminate\Support\Facades\Storage;
 
 class MenuController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $menus = Menu::latest()->get();
+        $query = Menu::query();
+        
+        if ($request->has('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        $menus = $query->latest()->get();
         return view('admin.menus.index', compact('menus'));
     }
 
@@ -34,7 +40,7 @@ class MenuController extends Controller
             // Menyimpan gambar ke folder storage/app/public/menus
             $path = $request->file('image')->store('menus', 'public');
             // Cukup simpan path-nya saja (misal: menus/namafile.png) ke database
-            $validated['image_url'] = $path;
+            $validated['image'] = $path;
         }
 
         $validated['is_available'] = $request->has('is_available');
@@ -61,13 +67,13 @@ class MenuController extends Controller
 
         if ($request->hasFile('image')) {
             // Hapus gambar lama jika ada sebelum upload yang baru (opsional tapi disarankan)
-            if ($menu->image_url && !str_starts_with($menu->image_url, 'http')) {
-                Storage::disk('public')->delete($menu->image_url);
+            if ($menu->image && !str_starts_with($menu->image, 'http')) {
+                Storage::disk('public')->delete($menu->image);
             }
 
             // Simpan gambar baru
             $path = $request->file('image')->store('menus', 'public');
-            $validated['image_url'] = $path;
+            $validated['image'] = $path;
         }
 
         $validated['is_available'] = $request->has('is_available');
